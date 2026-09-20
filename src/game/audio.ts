@@ -1,11 +1,26 @@
-/** Procedural dungeon SFX. Unlocked on the first user gesture. */
+const SAMPLES = {
+  pickup: "/audio/sfx/relic-pickup.mp3",
+  win: "/audio/sfx/floor-clear.mp3",
+  whoosh: "/audio/sfx/arch-descend.mp3",
+  locked: "/audio/sfx/door-sealed.mp3",
+  unseal: "/audio/sfx/exit-unseal.mp3",
+  puzzle: "/audio/sfx/puzzle-solved.mp3",
+  lever: "/audio/sfx/lever-pull.mp3",
+  ambTorch: "/audio/sfx/amb-torch-loop.mp3",
+  ambCave: "/audio/sfx/amb-cave-loop.mp3",
+} as const;
+
+type SampleId = keyof typeof SAMPLES;
+
+/** Sampled dungeon SFX, with two lightweight procedural sounds for high-frequency events. Unlocked on the first user gesture. */
 export class GameAudio {
   private ctx: AudioContext | null = null;
   private master: GainNode | null = null;
   private sfx: GainNode | null = null;
   private music: GainNode | null = null;
-  private drone: OscillatorNode | null = null;
-  private drone2: OscillatorNode | null = null;
+  private buffers = new Map<SampleId, AudioBuffer>();
+  private ambTorchSrc: AudioBufferSourceNode | null = null;
+  private ambCaveSrc: AudioBufferSourceNode | null = null;
   muted = false;
   private started = false;
 
@@ -22,8 +37,37 @@ export class GameAudio {
       this.sfx.connect(this.master);
       this.music.connect(this.master);
       this.master.connect(this.ctx.destination);
+      this.loadSamples();
     }
     if (this.ctx.state === "suspended") void this.ctx.resume();
+  }
+
+  private loadSamples() {
+    const ctx = this.ctx;
+    if (!ctx) return;
+    for (const id of Object.keys(SAMPLES) as SampleId[]) {
+      fetch(SAMPLES[id])
+        .then((res) => res.arrayBuffer())
+        .then((data) => ctx.decodeAudioData(data))
+        .then((buf) => this.buffers.set(id, buf))
+        .catch(() => {
+          /* sample unavailable, that cue stays silent */
+        });
+    }
+  }
+
+  private playOneShot(id: SampleId, bus: GainNode | null, gain = 1, rate = 1) {
+    const ctx = this.ctx;
+    const buffer = this.buffers.get(id);
+    if (!ctx || !bus || !buffer) return;
+    const src = ctx.createBufferSource();
+    src.buffer = buffer;
+    src.playbackRate.value = rate;
+    const g = ctx.createGain();
+    g.gain.value = gain;
+    src.connect(g);
+    g.connect(bus);
+    src.start();
   }
 
   setMuted(next: boolean) {
@@ -38,65 +82,51 @@ export class GameAudio {
     const ctx = this.ctx;
     const music = this.music;
     if (!ctx || !music || this.started) return;
+    const torch = this.buffers.get("ambTorch");
+    const cave = this.buffers.get("ambCave");
+    if (!torch || !cave) {
+      // Samples still loading from the first gesture; try again next frame-ish.
+      setTimeout(() => this.startAmbience(), 150);
+      return;
+    }
     this.started = true;
 
-    const osc = ctx.createOscillator();
-    osc.type = "sine";
-    osc.frequency.value = 73;
-    const g = ctx.createGain();
-    g.gain.value = 0.22;
-    const filt = ctx.createBiquadFilter();
-    filt.type = "lowpass";
-    filt.frequency.value = 280;
-    osc.connect(g);
-    g.connect(filt);
-    filt.connect(music);
-    osc.start();
-    this.drone = osc;
+    const torchSrc = ctx.createBufferSource();
+    torchSrc.buffer = torch;
+    torchSrc.loop = true;
+    const torchGain = ctx.createGain();
+    torchGain.gain.value = 0.55;
+    torchSrc.connect(torchGain);
+    torchGain.connect(music);
+    torchSrc.start();
+    this.ambTorchSrc = torchSrc;
 
-    const osc2 = ctx.createOscillator();
-    osc2.type = "triangle";
-    osc2.frequency.value = 110;
-    const g2 = ctx.createGain();
-    g2.gain.value = 0.08;
-    osc2.connect(g2);
-    g2.connect(music);
-    osc2.start();
-    this.drone2 = osc2;
+    const caveSrc = ctx.createBufferSource();
+    caveSrc.buffer = cave;
+    caveSrc.loop = true;
+    const caveGain = ctx.createGain();
+    caveGain.gain.value = 0.35;
+    caveSrc.connect(caveGain);
+    caveGain.connect(music);
+    caveSrc.start();
+    this.ambCaveSrc = caveSrc;
   }
 
   stopAmbience() {
     try {
-      this.drone?.stop();
-      this.drone2?.stop();
+      this.ambTorchSrc?.stop();
+      this.ambCaveSrc?.stop();
     } catch {
       /* already stopped */
     }
-    this.drone = null;
-    this.drone2 = null;
+    this.ambTorchSrc = null;
+    this.ambCaveSrc = null;
     this.started = false;
   }
 
   pickup() {
     this.unlock();
-    const ctx = this.ctx;
-    const sfx = this.sfx;
-    if (!ctx || !sfx) return;
-    const now = ctx.currentTime;
-    const notes = [523.25, 659.25, 783.99];
-    notes.forEach((f, i) => {
-      const osc = ctx.createOscillator();
-      osc.type = "triangle";
-      osc.frequency.value = f * (0.98 + Math.random() * 0.04);
-      const g = ctx.createGain();
-      g.gain.setValueAtTime(0.0001, now);
-      g.gain.exponentialRampToValueAtTime(0.18, now + 0.02 + i * 0.04);
-      g.gain.exponentialRampToValueAtTime(0.0001, now + 0.28 + i * 0.05);
-      osc.connect(g);
-      g.connect(sfx);
-      osc.start(now + i * 0.04);
-      osc.stop(now + 0.4 + i * 0.05);
-    });
+    this.playOneShot("pickup", this.sfx, 0.8, 0.96 + Math.random() * 0.08);
   }
 
   footstep() {
@@ -128,96 +158,22 @@ export class GameAudio {
 
   win() {
     this.unlock();
-    const ctx = this.ctx;
-    const sfx = this.sfx;
-    if (!ctx || !sfx) return;
-    const now = ctx.currentTime;
-    const notes = [261.63, 329.63, 392.0, 523.25, 659.25];
-    notes.forEach((f, i) => {
-      const osc = ctx.createOscillator();
-      osc.type = i % 2 ? "triangle" : "sine";
-      osc.frequency.value = f;
-      const g = ctx.createGain();
-      const t = now + i * 0.11;
-      g.gain.setValueAtTime(0.0001, t);
-      g.gain.exponentialRampToValueAtTime(0.2, t + 0.03);
-      g.gain.exponentialRampToValueAtTime(0.0001, t + 0.55);
-      osc.connect(g);
-      g.connect(sfx);
-      osc.start(t);
-      osc.stop(t + 0.6);
-    });
+    this.playOneShot("win", this.sfx, 0.85);
   }
 
   whoosh() {
     this.unlock();
-    const ctx = this.ctx;
-    const sfx = this.sfx;
-    if (!ctx || !sfx) return;
-    const now = ctx.currentTime;
-    const osc = ctx.createOscillator();
-    osc.type = "sawtooth";
-    osc.frequency.setValueAtTime(180, now);
-    osc.frequency.exponentialRampToValueAtTime(60, now + 0.35);
-    const g = ctx.createGain();
-    g.gain.setValueAtTime(0.0001, now);
-    g.gain.exponentialRampToValueAtTime(0.08, now + 0.04);
-    g.gain.exponentialRampToValueAtTime(0.0001, now + 0.4);
-    const filt = ctx.createBiquadFilter();
-    filt.type = "lowpass";
-    filt.frequency.value = 640;
-    osc.connect(filt);
-    filt.connect(g);
-    g.connect(sfx);
-    osc.start(now);
-    osc.stop(now + 0.42);
+    this.playOneShot("whoosh", this.sfx, 0.7);
   }
 
   locked() {
     this.unlock();
-    const ctx = this.ctx;
-    const sfx = this.sfx;
-    if (!ctx || !sfx) return;
-    const now = ctx.currentTime;
-    const osc = ctx.createOscillator();
-    osc.type = "square";
-    osc.frequency.setValueAtTime(140, now);
-    osc.frequency.exponentialRampToValueAtTime(70, now + 0.18);
-    const g = ctx.createGain();
-    g.gain.setValueAtTime(0.0001, now);
-    g.gain.exponentialRampToValueAtTime(0.12, now + 0.02);
-    g.gain.exponentialRampToValueAtTime(0.0001, now + 0.22);
-    const filt = ctx.createBiquadFilter();
-    filt.type = "lowpass";
-    filt.frequency.value = 380;
-    osc.connect(filt);
-    filt.connect(g);
-    g.connect(sfx);
-    osc.start(now);
-    osc.stop(now + 0.24);
+    this.playOneShot("locked", this.sfx, 0.75);
   }
 
   unseal() {
     this.unlock();
-    const ctx = this.ctx;
-    const sfx = this.sfx;
-    if (!ctx || !sfx) return;
-    const now = ctx.currentTime;
-    const notes = [392.0, 523.25, 659.25];
-    notes.forEach((f, i) => {
-      const osc = ctx.createOscillator();
-      osc.type = "sine";
-      osc.frequency.value = f;
-      const g = ctx.createGain();
-      const t = now + i * 0.07;
-      g.gain.setValueAtTime(0.0001, t);
-      g.gain.exponentialRampToValueAtTime(0.16, t + 0.03);
-      g.gain.exponentialRampToValueAtTime(0.0001, t + 0.4);
-      osc.connect(g);
-      g.connect(sfx);
-      osc.start(t);
-      osc.stop(t + 0.45);
-    });
+    this.playOneShot("unseal", this.sfx, 0.85);
   }
 
   talk() {
@@ -242,49 +198,12 @@ export class GameAudio {
 
   lever() {
     this.unlock();
-    const ctx = this.ctx;
-    const sfx = this.sfx;
-    if (!ctx || !sfx) return;
-    const now = ctx.currentTime;
-    const osc = ctx.createOscillator();
-    osc.type = "square";
-    osc.frequency.setValueAtTime(90, now);
-    osc.frequency.exponentialRampToValueAtTime(50, now + 0.1);
-    const g = ctx.createGain();
-    g.gain.setValueAtTime(0.0001, now);
-    g.gain.exponentialRampToValueAtTime(0.1, now + 0.015);
-    g.gain.exponentialRampToValueAtTime(0.0001, now + 0.14);
-    const filt = ctx.createBiquadFilter();
-    filt.type = "lowpass";
-    filt.frequency.value = 420;
-    osc.connect(filt);
-    filt.connect(g);
-    g.connect(sfx);
-    osc.start(now);
-    osc.stop(now + 0.16);
+    this.playOneShot("lever", this.sfx, 0.75, 0.95 + Math.random() * 0.1);
   }
 
   puzzle() {
     this.unlock();
-    const ctx = this.ctx;
-    const sfx = this.sfx;
-    if (!ctx || !sfx) return;
-    const now = ctx.currentTime;
-    const notes = [329.63, 415.3, 493.88, 659.25];
-    notes.forEach((f, i) => {
-      const osc = ctx.createOscillator();
-      osc.type = "triangle";
-      osc.frequency.value = f;
-      const g = ctx.createGain();
-      const t = now + i * 0.06;
-      g.gain.setValueAtTime(0.0001, t);
-      g.gain.exponentialRampToValueAtTime(0.14, t + 0.02);
-      g.gain.exponentialRampToValueAtTime(0.0001, t + 0.32);
-      osc.connect(g);
-      g.connect(sfx);
-      osc.start(t);
-      osc.stop(t + 0.36);
-    });
+    this.playOneShot("puzzle", this.sfx, 0.85);
   }
 
   dispose() {
@@ -294,5 +213,6 @@ export class GameAudio {
     this.master = null;
     this.sfx = null;
     this.music = null;
+    this.buffers.clear();
   }
 }
