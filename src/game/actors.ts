@@ -1,6 +1,58 @@
 import * as THREE from "three";
+import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { CELL } from "./maze";
 import { NPCS, glyphLabel, type BoonId, type Glyph, type NpcId, type QuestItemId } from "./content";
+
+/** NPCs with a Meshy-generated mesh; the rest stay procedural. */
+const NPC_MODEL_URL: Partial<Record<NpcId, string>> = {
+  bramble: "/models/npc/bramble.glb",
+  vellum: "/models/npc/vellum.glb",
+  calden: "/models/npc/calden.glb",
+};
+const NPC_MODEL_HEIGHT = 1.7;
+
+const gltfLoader = new GLTFLoader();
+const npcModelCache = new Map<NpcId, THREE.Object3D>();
+const npcModelLoads = new Map<NpcId, Promise<THREE.Object3D | null>>();
+
+function deepCloneModel(root: THREE.Object3D): THREE.Object3D {
+  const clone = root.clone(true);
+  clone.traverse((o) => {
+    if (!(o instanceof THREE.Mesh)) return;
+    o.geometry = o.geometry.clone();
+    o.material = Array.isArray(o.material) ? o.material.map((m) => m.clone()) : o.material.clone();
+  });
+  return clone;
+}
+
+function loadNpcModel(id: NpcId): Promise<THREE.Object3D | null> {
+  const url = NPC_MODEL_URL[id];
+  if (!url) return Promise.resolve(null);
+  const cached = npcModelCache.get(id);
+  if (cached) return Promise.resolve(cached);
+  let pending = npcModelLoads.get(id);
+  if (!pending) {
+    pending = new Promise((resolve) => {
+      gltfLoader.load(
+        url,
+        (gltf) => {
+          const root = gltf.scene;
+          const box = new THREE.Box3().setFromObject(root);
+          const size = box.getSize(new THREE.Vector3());
+          const scale = size.y > 0 ? NPC_MODEL_HEIGHT / size.y : 1;
+          root.scale.setScalar(scale);
+          root.position.y -= box.min.y * scale;
+          npcModelCache.set(id, root);
+          resolve(root);
+        },
+        undefined,
+        () => resolve(null),
+      );
+    });
+    npcModelLoads.set(id, pending);
+  }
+  return pending;
+}
 
 function mat(
   color: number,
@@ -104,6 +156,15 @@ export function makeNpc(id: NpcId): THREE.Group {
       o.receiveShadow = false;
     }
   });
+
+  if (NPC_MODEL_URL[id]) {
+    void loadNpcModel(id).then((model) => {
+      if (!model || !g.parent) return;
+      g.clear();
+      g.add(deepCloneModel(model));
+    });
+  }
+
   return g;
 }
 
