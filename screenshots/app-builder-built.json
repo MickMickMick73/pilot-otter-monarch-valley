@@ -1,0 +1,38 @@
+{
+  "url": "http://127.0.0.1:8081/",
+  "viewports": {
+    "desktop": {
+      "width": 1280,
+      "height": 800,
+      "status": 200,
+      "title": "Wyrmwood Keep",
+      "hasCanvas": true,
+      "bodyTextLen": 224,
+      "bodyTextHash": "4ea6df148b0abdc00c4d18104d2a84eaef195386f7d08b072b4954428bc32d29",
+      "bodyTextPrefix": "KEEP FORGOTTEN DUNGEON Wyrmwood Keep Relics still gleam in the d",
+      "horizontalOverflow": false,
+      "consoleErrors": [],
+      "pageErrors": [],
+      "screenshot": "/workspace/screenshots/app-builder-built.png"
+    },
+    "mobile": {
+      "width": 390,
+      "height": 844,
+      "status": 200,
+      "title": "Wyrmwood Keep",
+      "hasCanvas": true,
+      "bodyTextLen": 224,
+      "bodyTextHash": "4ea6df148b0abdc00c4d18104d2a84eaef195386f7d08b072b4954428bc32d29",
+      "bodyTextPrefix": "KEEP FORGOTTEN DUNGEON Wyrmwood Keep Relics still gleam in the d",
+      "horizontalOverflow": false,
+      "consoleErrors": [],
+      "pageErrors": [],
+      "screenshot": "/workspace/screenshots/app-builder-built-mobile.png"
+    }
+  },
+  "brandWarnings": [],
+  "authWarnings": [],
+  "verdictFile": "/workspace/screenshots/app-builder-built.json",
+  "divergesFromBaseline": false,
+  "baselineReasons": []
+}

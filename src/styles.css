@@ -1,0 +1,74 @@
+@import "tailwindcss";
+
+@theme {
+  --color-ink: #14100c;
+  --color-oak: #1c1611;
+  --color-panel: #2a221b;
+  --color-panel-2: #352b22;
+  --color-parchment: #e8dcc4;
+  --color-parchment-dim: #cbbfa6;
+  --color-ember: #c45c32;
+  --color-ember-hot: #e07a45;
+  --color-moss: #5a7a4a;
+  --color-gold: #d4a84b;
+  --color-border: color-mix(in oklab, #e8dcc4 16%, transparent);
+  --color-border-strong: color-mix(in oklab, #e8dcc4 28%, transparent);
+
+  --font-display: "Cinzel", "Palatino Linotype", Palatino, serif;
+  --font-serif: "Source Serif 4", "Iowan Old Style", "Palatino Linotype", serif;
+  --font-sans: "Source Serif 4", "Iowan Old Style", Georgia, serif;
+
+  --radius-xs: 4px;
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 24px;
+
+  --text-xs: 0.75rem;
+  --text-sm: 0.875rem;
+  --text-base: 1.0625rem;
+  --text-lg: 1.2rem;
+  --text-xl: 1.5rem;
+  --text-2xl: clamp(2rem, 1.4rem + 2vw, 3rem);
+  --text-3xl: clamp(2.4rem, 1.5rem + 3.2vw, 4.2rem);
+}
+
+@layer base {
+  html,
+  body,
+  #app {
+    height: 100%;
+  }
+
+  html,
+  body {
+    background: var(--color-ink);
+    color: var(--color-parchment);
+    font-family: var(--font-serif);
+  }
+
+  button:not(:disabled),
+  [role="button"]:not(:disabled) {
+    cursor: pointer;
+  }
+
+  canvas {
+    display: block;
+  }
+}
+
+@layer utilities {
+  .tabular {
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

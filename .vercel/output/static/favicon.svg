@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" role="img" aria-label="Wyrmwood Keep">
+  <rect width="32" height="32" rx="7" fill="#14100c"/>
+  <path fill="#d4a84b" d="M6.5 26V15h2v-4h3.2v4h2.1v-4H17v4h2.1v-4h3.2v4h2.7v11H6.5z"/>
+  <path fill="#c45c32" d="M13.4 26v-5.2a2.6 2.6 0 0 1 5.2 0V26z"/>
+</svg>
